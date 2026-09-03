@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nearby_users_getter/screens/edit_place_screen.dart';
 
 import '../models/place.dart';
 import '../services/storage_service.dart';
@@ -20,6 +21,22 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<void> _editPlace(Place place) async {
+    final updatedPlace = await Navigator.of(context).push<Place>(
+      MaterialPageRoute(builder: (_) => EditPlaceScreen(place: place)),
+    );
+
+    if (updatedPlace == null) return;
+
+    setState(() {
+      _places = _places
+          .map((p) => p.id == updatedPlace.id ? updatedPlace : p)
+          .toList();
+    });
+
+    await _save();
   }
 
   Future<void> _load() async {
@@ -52,7 +69,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _delete(Place place) async {
-    setState(() => _places = _places.where((p) => p.id != place.id).toList());
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete place?'),
+          content: Text('Are you sure you want to delete "${place.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    setState(() {
+      _places = _places.where((p) => p.id != place.id).toList();
+    });
+
     await _save();
   }
 
@@ -86,7 +132,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: place.active,
                           onChanged: (v) => _toggleActive(place, v),
                         ),
+
                         IconButton(
+                          tooltip: 'Edit',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _editPlace(place),
+                        ),
+
+                        IconButton(
+                          tooltip: 'Delete',
                           icon: const Icon(Icons.delete_outline),
                           onPressed: () => _delete(place),
                         ),

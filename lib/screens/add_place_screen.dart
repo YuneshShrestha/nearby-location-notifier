@@ -15,7 +15,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   final _nameController = TextEditingController();
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
-  final _radiusController = TextEditingController(text: '50');
+  final _radiusController = TextEditingController(text: '180');
 
   bool _locating = false;
 
