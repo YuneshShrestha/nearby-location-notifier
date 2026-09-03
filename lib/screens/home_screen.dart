@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../models/place.dart';
 import '../services/storage_service.dart';
-import '../services/foreground_geofence_controller.dart';
 import 'add_place_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,30 +28,15 @@ class _HomeScreenState extends State<HomeScreen> {
       _places = places;
       _loading = false;
     });
-    await _syncServiceState();
   }
 
   Future<void> _save() async {
     await _storage.savePlaces(_places);
-    await _syncServiceState();
-  }
-
-  /// The foreground service should be running whenever at least one place
-  /// is active; the task handler re-reads the place list from disk itself,
-  /// so all this needs to do is start/stop the service.
-  Future<void> _syncServiceState() async {
-    final hasActivePlace = _places.any((p) => p.active);
-    if (hasActivePlace) {
-      await ForegroundGeofenceController.instance.ensureRunning();
-    } else {
-      await ForegroundGeofenceController.instance.stop();
-    }
   }
 
   Future<void> _addPlace() async {
-    final newPlace = await Navigator.of(context).push<Place>(
-      MaterialPageRoute(builder: (_) => const AddPlaceScreen()),
-    );
+    final newPlace = await Navigator.of(context)
+        .push<Place>(MaterialPageRoute(builder: (_) => const AddPlaceScreen()));
     if (newPlace == null) return;
     setState(() => _places = [..._places, newPlace]);
     await _save();
@@ -74,55 +59,43 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nearby Notifier'),
-        actions: [
-          IconButton(
-            tooltip: 'Improve background reliability',
-            icon: const Icon(Icons.battery_saver_outlined),
-            onPressed: () async {
-              await ForegroundGeofenceController.instance
-                  .requestIgnoreBatteryOptimizations();
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Nearby Notifier')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _places.isEmpty
-              ? _EmptyState(onAdd: _addPlace)
-              : ListView.separated(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _places.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final place = _places[index];
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.place_outlined),
-                        title: Text(place.name),
-                        subtitle: Text(
-                          '${place.radiusMeters.toStringAsFixed(0)} m radius · '
-                          '${place.latitude.toStringAsFixed(4)}, '
-                          '${place.longitude.toStringAsFixed(4)}',
+          ? _EmptyState(onAdd: _addPlace)
+          : ListView.separated(
+              padding: const EdgeInsets.all(12),
+              itemCount: _places.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final place = _places[index];
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.place_outlined),
+                    title: Text(place.name),
+                    subtitle: Text(
+                      '${place.radiusMeters.toStringAsFixed(0)} m radius · '
+                      '${place.latitude.toStringAsFixed(4)}, '
+                      '${place.longitude.toStringAsFixed(4)}',
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Switch(
+                          value: place.active,
+                          onChanged: (v) => _toggleActive(place, v),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Switch(
-                              value: place.active,
-                              onChanged: (v) => _toggleActive(place, v),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () => _delete(place),
-                            ),
-                          ],
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => _delete(place),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addPlace,
         icon: const Icon(Icons.add_location_alt_outlined),
