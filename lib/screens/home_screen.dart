@@ -1,0 +1,166 @@
+import 'package:flutter/material.dart';
+import '../models/place.dart';
+import '../services/storage_service.dart';
+import '../services/foreground_geofence_controller.dart';
+import 'add_place_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final _storage = StorageService();
+  List<Place> _places = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final places = await _storage.loadPlaces();
+    setState(() {
+      _places = places;
+      _loading = false;
+    });
+    await _syncServiceState();
+  }
+
+  Future<void> _save() async {
+    await _storage.savePlaces(_places);
+    await _syncServiceState();
+  }
+
+  /// The foreground service should be running whenever at least one place
+  /// is active; the task handler re-reads the place list from disk itself,
+  /// so all this needs to do is start/stop the service.
+  Future<void> _syncServiceState() async {
+    final hasActivePlace = _places.any((p) => p.active);
+    if (hasActivePlace) {
+      await ForegroundGeofenceController.instance.ensureRunning();
+    } else {
+      await ForegroundGeofenceController.instance.stop();
+    }
+  }
+
+  Future<void> _addPlace() async {
+    final newPlace = await Navigator.of(context).push<Place>(
+      MaterialPageRoute(builder: (_) => const AddPlaceScreen()),
+    );
+    if (newPlace == null) return;
+    setState(() => _places = [..._places, newPlace]);
+    await _save();
+  }
+
+  Future<void> _toggleActive(Place place, bool value) async {
+    setState(() {
+      _places = _places
+          .map((p) => p.id == place.id ? p.copyWith(active: value) : p)
+          .toList();
+    });
+    await _save();
+  }
+
+  Future<void> _delete(Place place) async {
+    setState(() => _places = _places.where((p) => p.id != place.id).toList());
+    await _save();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Nearby Notifier'),
+        actions: [
+          IconButton(
+            tooltip: 'Improve background reliability',
+            icon: const Icon(Icons.battery_saver_outlined),
+            onPressed: () async {
+              await ForegroundGeofenceController.instance
+                  .requestIgnoreBatteryOptimizations();
+            },
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _places.isEmpty
+              ? _EmptyState(onAdd: _addPlace)
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _places.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final place = _places[index];
+                    return Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.place_outlined),
+                        title: Text(place.name),
+                        subtitle: Text(
+                          '${place.radiusMeters.toStringAsFixed(0)} m radius · '
+                          '${place.latitude.toStringAsFixed(4)}, '
+                          '${place.longitude.toStringAsFixed(4)}',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Switch(
+                              value: place.active,
+                              onChanged: (v) => _toggleActive(place, v),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _delete(place),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addPlace,
+        icon: const Icon(Icons.add_location_alt_outlined),
+        label: const Text('Add place'),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyState({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_searching, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'No places yet. Add a fixed place (like your college, a shop, '
+              'or a meeting point) and get notified when you\'re nearby — '
+              'even if the app is closed.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+              label: const Text('Add your first place'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

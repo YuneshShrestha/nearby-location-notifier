@@ -58,7 +58,7 @@ dependencies:
 
   # Periodic background checks (~15 min min interval on Android) as a
   # battery-friendly backup to the foreground-service based engine above
-  workmanager: ^0.5.2
+  workmanager: ^0.10.9
 
   # Unique ids for places
   uuid: ^4.4.0
